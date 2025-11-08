@@ -525,7 +525,7 @@ class ModelInferenceEngine:
         Run inference on a single prompt. If cached, returns from the cache.
         """
 
-        temperature =ModelEngineFactory.get_temperature(model_name,args=self.args.temperature) 
+        temperature = ModelEngineFactory.get_temperature(model_name, temperature=self.args.temperature) 
         
         print(f"Using temperature {temperature} for model {model_name}")
         

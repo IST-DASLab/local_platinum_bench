@@ -45,9 +45,9 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, arg
         errors[model_name] = []
 
         if parallelism > 1:
-            outputs = run_predictions_parallel(platinum_dataset, dataset_name, model_name, load_only=False, num_threads=parallelism, args=None)
+            outputs = run_predictions_parallel(platinum_dataset, dataset_name, model_name, load_only=False, num_threads=parallelism, args=args)
         else:
-            outputs = run_predictions(platinum_dataset, dataset_name, model_name, load_only=False, args=None)
+            outputs = run_predictions(platinum_dataset, dataset_name, model_name, load_only=False, args=args)
 
         empty_count = 0
         for example, output in zip(platinum_dataset, outputs):
