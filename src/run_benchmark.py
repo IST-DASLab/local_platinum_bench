@@ -17,6 +17,8 @@ from utils import get_parse_fn, check_prediction, get_prompt, run_predictions, r
 
 def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use_paper_version=False, use_unfiltered_version=False, args=None):
     load_dotenv()
+    
+    print("args:", args)
 
     dataset_names = [
         "singleop",

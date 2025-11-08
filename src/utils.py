@@ -168,7 +168,7 @@ def run_predictions(dataset, dataset_name, model_name, force_refresh=False, load
     predictions = []
     for example in tqdm(dataset):
         key, response, set_cache = process_single_example(example, model_name, dataset_name, inference_engine=inference_engine,
-                                                     force_refresh=force_refresh, load_only=load_only)
+                                                     force_refresh=force_refresh, load_only=load_only, args=args)
         predictions.append(response)
         if set_cache:
             response_cache.set(key, response)
@@ -188,7 +188,7 @@ def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=Fa
         inference_engine = ModelInferenceEngine(response_cache, args=args)
 
         try:
-            return process_single_example(example, model_name, dataset_name, inference_engine=inference_engine, force_refresh=force_refresh, load_only=load_only)
+            return process_single_example(example, model_name, dataset_name, inference_engine=inference_engine, force_refresh=force_refresh, load_only=load_only, args=args)
         except Exception as e:
             print(f"Error processing example: {example}")
             print(e)
