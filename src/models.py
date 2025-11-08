@@ -376,6 +376,7 @@ class ModelEngineFactory:
             return cls._model_engines[model_name]
         if args.vllm:
             print("Using vllm model")
+            print(f"Model name: {model_name}, Host: {args.host}, Port: {args.port}")
             engine = LocalModel(
                 api_name=model_name,
                 base_url= "http://" + args.host + f":{args.port}/v1",
