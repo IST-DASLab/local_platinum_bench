@@ -21,7 +21,7 @@ template_gsm8k = """Solve the following math word problem.
 
 Think step-by-step. Then, provide the final answer as a single integer in the format "Answer: XXX" with no extra formatting."""
 
-def run_benchmark(model_list, output_file, parallelism=1, save_errors=False):
+def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, args=None):
     load_dotenv()
 
     benchmark_path = "madrylab/gsm8k-platinum"
@@ -45,14 +45,14 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False):
         errors[model_name] = []
 
         if parallelism > 1:
-            outputs = run_predictions_parallel(platinum_dataset, dataset_name, model_name, load_only=False, num_threads=parallelism)
+            outputs = run_predictions_parallel(platinum_dataset, dataset_name, model_name, load_only=False, num_threads=parallelism, args=None)
         else:
-            outputs = run_predictions(platinum_dataset, dataset_name, model_name, load_only=False)
+            outputs = run_predictions(platinum_dataset, dataset_name, model_name, load_only=False, args=None)
 
         empty_count = 0
         for example, output in zip(platinum_dataset, outputs):
             platinum_target = example['platinum_target']
-            prompt = get_prompt(example, model_name)
+            prompt = get_prompt(example, model_name, args = args)
 
             if output is None:
                 empty_count += 1
@@ -75,9 +75,8 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False):
         if empty_count > 0:
             print(f"WARN: Model {model_name} had {empty_count} empty outputs for dataset {dataset_name}, perhaps due to API errors.")
             
-
         if save_errors:
-            errors_dir = './outputs/errors'
+            errors_dir = f'./errors/{model_name}/'
             os.makedirs(errors_dir, exist_ok=True)
             with open(os.path.join(errors_dir, f'errors_{dataset_name}.json'), 'w') as f:
                 json.dump(errors, f, indent=2)
@@ -98,10 +97,19 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate models on Platinum Benchmarks')
 
     parser.add_argument('--model-list', type=str, nargs="+", default=None, help='A space-separated list of models to be evaluated')
+    parser.add_argument('--vllm', action='store_true', help='The model is served with vllm.')
+    parser.add_argument('--port', type=int, default=8000, help='Port number for vllm server.')
+    parser.add_argument('--host', type=str, default='localhost', help='Host for vllm server.')
+    parser.add_argument('--api-key', type=str, default='token-abc123', help='API key for the model, if required.')
+    parser.add_argument('--temperature', type=float, default=0.5, help='Temperature for the model default is 0.5.')
+    parser.add_argument('--reasoning-model', action='store_true', help='Indicate if the model is in reasoning mode.')
     parser.add_argument('--output-file', type=str, default='./outputs/results_gsm8k_platinum.csv', help='Output file name to save the results')
     parser.add_argument('--parallel', type=int, default=1, help='Number of threads to use for parallel prediction. If more than 1, will use parallelism')
     parser.add_argument('--save-errors', action='store_true', help='Save errors for each dataset to the directory ./outputs/errors')
 
     args = parser.parse_args()
+    if len(args.model_list) > 1 and args.vllm:
+        raise ValueError("vllm serving with multiple models is not supported yet.")
+    
 
-    run_benchmark(args.model_list, args.output_file, parallelism=args.parallel, save_errors=args.save_errors)
+    run_benchmark(args.model_list, args.output_file, parallelism=args.parallel, save_errors=args.save_errors, args=args)

@@ -15,7 +15,7 @@ import argparse
 from utils import get_parse_fn, check_prediction, get_prompt, run_predictions, run_predictions_parallel
 
 
-def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use_paper_version=False, use_unfiltered_version=False):
+def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use_paper_version=False, use_unfiltered_version=False, args=None):
     load_dotenv()
 
     dataset_names = [
@@ -49,33 +49,36 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use
         if not use_unfiltered_version:
             platinum_dataset = platinum_dataset.filter(lambda x: x['cleaning_status'] != 'rejected')
 
-        print(len(platinum_dataset))
         parsing_strategy = platinum_dataset[0]['platinum_parsing_strategy']
         parse_fn = get_parse_fn(parsing_strategy)
         
         errors = {}
+
         for model_name in model_list:
+            print(model_name)
             errors[model_name] = []
-
             if parallelism > 1:
-                outputs = run_predictions_parallel(platinum_dataset, dataset_name, model_name, load_only=False, num_threads=parallelism)
+                outputs = run_predictions_parallel(platinum_dataset, dataset_name, model_name, load_only=False, num_threads=parallelism, args=args)
             else:
-                outputs = run_predictions(platinum_dataset, dataset_name, model_name, load_only=False)
-
+                outputs = run_predictions(platinum_dataset, dataset_name, model_name, load_only=False, args=args)
+            correct_answers = 0
+            incorrect_answers = 0
             empty_count = 0
             for example, output in zip(platinum_dataset, outputs):
                 platinum_target = example['platinum_target']
-                prompt = get_prompt(example, model_name)
-
+                prompt = get_prompt(example, model_name, args = args)
                 if output is None:
                     empty_count += 1
-
                 try:
                     prediction = parse_fn(output)
                     correct = check_prediction(prediction, platinum_target, prompt, dataset_name)
                 except:
                     prediction = 'parsing error'
                     correct = False
+                if correct:
+                    correct_answers += 1
+                else:
+                    incorrect_answers += 1
 
                 if not correct:
                     errors[model_name].append({
@@ -84,17 +87,19 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use
                         'prediction': prediction,
                         'explanation': output,
                     })
+               
             
             if empty_count > 0:
                 print(f"WARN: Model {model_name} had {empty_count} empty outputs for dataset {dataset_name}, perhaps due to API errors.")
                 
 
             if save_errors:
-                errors_dir = './outputs/errors'
+                errors_dir = f'./errors/{model_name}/'
                 os.makedirs(errors_dir, exist_ok=True)
                 with open(os.path.join(errors_dir, f'errors_{dataset_name}.json'), 'w') as f:
                     json.dump(errors, f, indent=2)
-            
+            print(correct_answers/(correct_answers+incorrect_answers))
+
         error_count_dict[dataset_name] = [len(errors[model_name]) for model_name in model_list]
 
     df = pd.DataFrame(error_count_dict)
@@ -111,6 +116,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate models on Platinum Benchmarks')
 
     parser.add_argument('--model-list', type=str, nargs="+", default=None, help='A space-separated list of models to be evaluated')
+    parser.add_argument('--vllm', action='store_true', help='The model is served with vllm.')
+    parser.add_argument('--port', type=int, default=8000, help='Port number for vllm server.')
+    parser.add_argument('--host', type=str, default='localhost', help='Host for vllm server.')
+    parser.add_argument('--api-key', type=str, default='token-abc123', help='API key for the model, if required.')
+    parser.add_argument('--temperature', type=float, default=0.5, help='Temperature for the model default is 0.5.')
+    parser.add_argument('--reasoning-model', action='store_true', help='Indicate if the model is in reasoning mode.')
     parser.add_argument('--output-file', type=str, default='./outputs/results.csv', help='Output file name to save the results')
     parser.add_argument('--parallel', type=int, default=1, help='Number of threads to use for parallel prediction. If more than 1, will use parallelism')
     parser.add_argument('--save-errors', action='store_true', help='Save errors for each dataset to the directory ./outputs/errors')
@@ -119,4 +130,7 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    run_benchmark(args.model_list, args.output_file, parallelism=args.parallel, save_errors=args.save_errors, use_paper_version=args.paper_version, use_unfiltered_version=args.unfiltered)
+    if len(args.model_list) > 1 and args.vllm:
+        raise ValueError("vllm serving with multiple models is not supported yet.")
+    
+    run_benchmark(args.model_list, args.output_file, parallelism=args.parallel, save_errors=args.save_errors, use_paper_version=args.paper_version, use_unfiltered_version=args.unfiltered, args=args)

@@ -127,25 +127,25 @@ def check_prediction(prediction, platinum_target, prompt, dataset_name):
     return correct
 
 
-def get_prompt(example, model_name):
+def get_prompt(example, model_name, args=None):
     #o1-preview refuses to answer sometimes unless we remove "Then" for some reason.
     if model_name.startswith('o1-preview') or model_name.startswith('o1-2024-12-17'):
         return example['platinum_prompt_no_cot'].replace('Then, provide', 'Provide')
     
-    if model_name in ModelEngineFactory.reasoning_models:
+    if model_name in ModelEngineFactory.reasoning_models or args.reasoning_model:
         return example['platinum_prompt_no_cot']
     else:
         return example['platinum_prompt']
 
-def process_single_example(example, model_name, dataset_name, inference_engine=None, force_refresh=False, load_only=False):
+def process_single_example(example, model_name, dataset_name, inference_engine=None, force_refresh=False, load_only=False, args=None):
     """Runs a single prediction and returns the result."""
 
     # Initialize a separate cache and inference engine for each thread if needed
     if inference_engine is None:
         response_cache = get_llm_cache(dataset_name)
-        inference_engine = ModelInferenceEngine(response_cache)
+        inference_engine = ModelInferenceEngine(response_cache, args=args)
 
-    prompt = get_prompt(example, model_name)
+    prompt = get_prompt(example, model_name, args = args)
     
     try:
         return inference_engine.run_inference(
@@ -160,10 +160,10 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
         return None, '', False
 
 
-def run_predictions(dataset, dataset_name, model_name, force_refresh=False, load_only=False):
+def run_predictions(dataset, dataset_name, model_name, force_refresh=False, load_only=False, args=None):
     """Runs the model on the full dataset and caches the results."""
     response_cache = get_llm_cache(dataset_name)
-    inference_engine = ModelInferenceEngine(response_cache)
+    inference_engine = ModelInferenceEngine(response_cache, args=args)
 
     predictions = []
     for example in tqdm(dataset):
@@ -176,7 +176,7 @@ def run_predictions(dataset, dataset_name, model_name, force_refresh=False, load
     return predictions
 
 
-def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=False, load_only=False, num_threads=16):
+def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=False, load_only=False, num_threads=16,args=None):
     """Runs the model on the full dataset and caches the results. Parallelized version."""
     import multiprocess as mp
 
@@ -185,7 +185,7 @@ def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=Fa
 
     def inference_fn(example):
         # Initialize a separate inference engine for each thread
-        inference_engine = ModelInferenceEngine(response_cache)
+        inference_engine = ModelInferenceEngine(response_cache, args=args)
 
         try:
             return process_single_example(example, model_name, dataset_name, inference_engine=inference_engine, force_refresh=force_refresh, load_only=load_only)

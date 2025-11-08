@@ -140,6 +140,17 @@ class OpenRouterModel(BaseCompletionStyleModel):
         )
 
 
+class LocalModel(BaseCompletionStyleModel):
+    def init_client(self, base_url="http://localhost:8002/v1", api_key="token-abc123"):
+        from openai import OpenAI
+
+        self.client = OpenAI(
+            base_url=base_url,
+            api_key=api_key,
+        )
+
+
+
 class DeepInfraModel(BaseCompletionStyleModel):
     def init_client(self):
         from openai import OpenAI
@@ -355,14 +366,22 @@ class ModelEngineFactory:
     ]
 
     @classmethod
-    def get_engine(cls, model_name):
+    def get_engine(cls, model_name, args=None):
         # If we already created an engine for this general "family", return it
         # or you can choose to cache them by exact `model_name`.
+        
+      
 
         if model_name in cls._model_engines:
             return cls._model_engines[model_name]
-
-        if model_name == "gpt-4o-2024-08-06":
+        if args.use_vllm:
+            print("Using vllm model")
+            engine = LocalModel(
+                api_name=model_name,
+                base_url= "http://" + args.host + f":{args.port}/v1",
+                api_key=args.api_key,
+            )
+        elif model_name == "gpt-4o-2024-08-06":
             engine = OpenAIModel(api_name="gpt-4o-2024-08-06")
         elif model_name == "gpt-4o-2024-11-20":
             engine = OpenAIModel(api_name="gpt-4o-2024-11-20")
@@ -428,6 +447,7 @@ class ModelEngineFactory:
             engine = DeepInfraModel(
                 api_name="meta-llama/Meta-Llama-3.2-11B-Vision-Instruct"
             )
+       
         elif model_name == "meta-llama/Llama-3.2-90B-Vision-Instruct":
             engine = DeepInfraModel(
                 api_name="meta-llama/Meta-Llama-3.2-90B-Vision-Instruct"
@@ -468,11 +488,11 @@ class ModelEngineFactory:
         return engine
 
     @classmethod
-    def get_temperature(cls, model_name):
+    def get_temperature(cls, model_name, temperature=0.5):
         if model_name in cls._temperature_dict:
             return cls._temperature_dict[model_name]
         else:
-            return 0.5
+            return temperature
 
 
 class ModelInferenceEngine:
@@ -484,8 +504,10 @@ class ModelInferenceEngine:
     - The caching logic (force refresh, etc.)
     """
 
-    def __init__(self, response_cache):
+
+    def __init__(self, response_cache, args=None):
         self.response_cache = response_cache
+        self.args = args
 
     def set_response_cache(self, response_cache):
         self.response_cache = response_cache
@@ -503,8 +525,10 @@ class ModelInferenceEngine:
         Run inference on a single prompt. If cached, returns from the cache.
         """
 
-        temperature = ModelEngineFactory.get_temperature(model_name)
-
+        temperature =ModelEngineFactory.get_temperature(model_name,args=self.args.temperature) 
+        
+        print(f"Using temperature {temperature} for model {model_name}")
+        
         if image_path is not None:
             key = (
                 prompt,
@@ -531,7 +555,7 @@ class ModelInferenceEngine:
                 return key, output, 0
 
         # Get the model engine from the factory
-        engine = ModelEngineFactory.get_engine(model_name)
+        engine = ModelEngineFactory.get_engine(model_name, args=self.args)
 
         if image_path is not None:
             base64_image = encode_image(image_path)
@@ -545,7 +569,7 @@ class ModelInferenceEngine:
             response = engine.predict(
                 prompt,
                 temperature=temperature,
-            )
+            ) # see what is this really predicting , is chat template used? what format is response?
 
         # Save to cache
         self.response_cache.set(key, response)
