@@ -39,6 +39,7 @@ class LLMCache:
 
 
 def get_llm_cache(dataset_name):
+    os.makedirs(os.path.dirname("cache/"), exist_ok=True)
     return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{dataset_name}.pkl')
 
 

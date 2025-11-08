@@ -141,9 +141,9 @@ class OpenRouterModel(BaseCompletionStyleModel):
 
 
 class LocalModel(BaseCompletionStyleModel):
-    def init_client(self, base_url="http://localhost:8000/v1", api_key="token-abc123"):
+    def init_client(self, api_name="", base_url="http://localhost:8000/v1", api_key="token-abc123"):
         from openai import OpenAI
-        print(f"Initializing LocalModel with base_url: {base_url} and api_key: {api_key}")
+        print(f"Initializing LocalModel {api_name} with base_url: {base_url} and api_key: {api_key}")
         self.client = OpenAI(
             base_url=base_url,
             api_key=api_key,
