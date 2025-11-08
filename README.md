@@ -8,14 +8,14 @@ Serve your model with vllm (for more details please see [here](https://docs.vllm
 ```bash
 vllm serve meta-llama/Llama-3.2-1B-Instruct \
         --dtype bfloat16 \
-        --api-key api_key \
+        --api-key token-abc123 \
         --gpu-memory-utilization 0.9 \
         --port 8000
 ```
 
 After that you can launch benchmarks using served model
 ```python
- python src/run_benchmark.py --vllm --port 8000 --host localhost --model-list meta-llama/Llama-3.2-1B-Instruct --api-key api_key --output-file outputs/Llama-3.2-1B-Instruct.csv --temperature 0.5 --save-errors
+ python src/run_benchmark.py --vllm --port 8000 --host localhost --model-list meta-llama/Llama-3.2-1B-Instruct --api-key token-abc123 --output-file outputs/Llama-3.2-1B-Instruct.csv --temperature 0.5 --save-errors
 ```
 
 Additionally for evals on multiple models from folder you can use running_local_quantized_models.py
