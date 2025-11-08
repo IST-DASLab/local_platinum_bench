@@ -530,9 +530,7 @@ class ModelInferenceEngine:
         """
 
         temperature = ModelEngineFactory.get_temperature(model_name, temperature=self.args.temperature) 
-        
-        print(f"Using temperature {temperature} for model {model_name}")
-        
+                
         if image_path is not None:
             key = (
                 prompt,
