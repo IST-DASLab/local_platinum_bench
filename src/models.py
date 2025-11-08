@@ -374,7 +374,7 @@ class ModelEngineFactory:
 
         if model_name in cls._model_engines:
             return cls._model_engines[model_name]
-        if args.use_vllm:
+        if args.vllm:
             print("Using vllm model")
             engine = LocalModel(
                 api_name=model_name,
