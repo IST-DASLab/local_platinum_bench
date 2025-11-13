@@ -1,10 +1,13 @@
 # Platinum Benchmarks
-This repository is making possible to do evals with models served wih vLLM.
+This repository allows to perform Platinum Bench Evals efficiently via vLLM. 
+
+Platinum Bench is a recent LLM evaluation suite where all the questions and answers have been inspected manually for correctness and clarity. 
 
 
-### Instruction:
+### Usage Instructions:
 
-Serve your model with vllm (for more details please see [here](https://docs.vllm.ai/en/latest/serving/openai_compatible_server/)):
+First, serve your model via vllm as usual (for more details please see [here](https://docs.vllm.ai/en/latest/serving/openai_compatible_server/)):
+
 ```bash
 vllm serve meta-llama/Llama-3.2-1B-Instruct \
         --dtype bfloat16 \
@@ -13,32 +16,21 @@ vllm serve meta-llama/Llama-3.2-1B-Instruct \
         --port 8000
 ```
 
-After that you can launch benchmarks using served model
+Second, you can launch benchmarks using the served model via: 
+
 ```python
  python src/run_benchmark.py --vllm --port 8000 --host localhost --model-list meta-llama/Llama-3.2-1B-Instruct --api-key token-abc123 --output-file outputs/Llama-3.2-1B-Instruct.csv --temperature 0.5 --save-errors
 ```
 
-Additionally for evals on multiple models from folder you can use running_local_quantized_models.py
+Additionally, for evals on multiple models from a folder, you can use the `running_local_quantized_models.py` script.
 
-
-
-
-
-
-
-
-
-Readme from platinum bench
+The original README from Platinum Bench is below:
 
 [**🏆 Leaderboard**](http://platinum-bench.csail.mit.edu/) &nbsp;|&nbsp; [**📖 Paper**](https://arxiv.org/abs/2502.03461) &nbsp;|&nbsp; [**🤗 Dataset**](https://huggingface.co/datasets/madrylab/platinum-bench) &nbsp;|&nbsp; [**🤗 GSM8K-Platinum**](https://huggingface.co/datasets/madrylab/gsm8k-platinum)
 
 This repository contains the evaluation code for "[Do Large Language Model Benchmarks Test Reliability?](https://arxiv.org/abs/2502.03461)."
 
 We introduce **platinum benchmarks**, LLM benchmarks designed to test the reliability. Platinum benchmarks are carefully curated to minimize label errors and ambiguity, so that perfect performance is possible. It turns out, frontier language models still make mistakes on surprisingly simple tasks.
-
-## 🔔 News
-🚀 [2024-03-06]: We launched *GSM8K-Platinum* on [HuggingFace](https://huggingface.co/datasets/madrylab/gsm8k-platinum)! The eval code and instructions are included here.
-
 
 ## Dataset
 
