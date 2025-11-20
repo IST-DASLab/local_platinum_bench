@@ -44,33 +44,52 @@ class Model:
 
 
 class HFCompletionStyleModel(Model):
+
     def init_client(self):
-        self.model = self.model.pop('model', 'http://localhost:8000')
-        self.tokenizer  = self.tokenizer.pop('tokenizer', None)
+
+        # get model / tokenizer passed via api_kwargs
+        self.model = self.api_kwargs.pop("model", None)
+        self.tokenizer = self.api_kwargs.pop("tokenizer", None)
+        if self.model is None or self.tokenizer is None:
+            raise ValueError("Both 'model' and 'tokenizer' must be provided in api_kwargs.")
+
         if torch.cuda.is_available():
             self.model = self.model.to("cuda")
-            self.model = self.tokenizer.to("cuda")
 
-    def predict(self, prompt, temperature=0.5):
+    def predict(self, prompt, temperature: float = 0.5) -> str:
         messages = [
-                {"role": "user", "content": prompt},
-            ]
-        inputs = self.tokenizer.apply_chat_template(
+            {"role": "user", "content": prompt},
+        ]
+
+        # IMPORTANT: return_tensors="pt" so we get a BatchEncoding with tensors
+        input_ids = self.tokenizer.apply_chat_template(
             messages,
             tokenize=True,
-            add_generation_prompt=True
+            add_generation_prompt=True,
+            return_tensors="pt",
         )
-        if torch.cuda.is_available():
-            inputs = {k: v.to("cuda") for k, v in inputs.items()}
-        
+        if not isinstance(input_ids, torch.Tensor):
+            input_ids = torch.tensor(input_ids)
+        if input_ids.ndim == 1:
+            input_ids = input_ids.unsqueeze(0)  # add batch dimension
+        # Move inputs to same device as model
+        device = next(self.model.parameters()).device
+        input_ids = input_ids.to(device)
+
         outputs = self.model.generate(
-            **inputs,
+            input_ids,
             max_new_tokens=self.max_tokens,
             temperature=temperature,
-            do_sample=True,
+            do_sample=temperature > 0,
         )
-        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+        # Drop the prompt part, decode only generated tokens
+        input_len = input_ids.shape[-1]
+        generated_ids = outputs[0, input_len:]
+
+        response = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
         return response
+
 
 
 
@@ -405,13 +424,15 @@ class ModelEngineFactory:
         # If we already created an engine for this general "family", return it
         # or you can choose to cache them by exact `model_name`.
         
-        if isinstance(model_name, dict):
-            return HFCompletionStyleModel(api_name=model_name, tokenizer=args.tokenizer, model = args.model )
+        if hasattr(args, "model"):
+            if not isinstance(args.model,torch.nn.Module):
+                raise NotImplementedError
+            return HFCompletionStyleModel(api_name=model_name, tokenizer= args.tokenizer, model = args.model )
 
         if model_name in cls._model_engines:
             return cls._model_engines[model_name]
         
-        if args.vllm:
+        if getattr(args, "vllm", False):
             print("Using vllm model")
             print(f"Model name: {model_name}, Host: {args.host}, Port: {args.port}")
             engine = LocalModel(
@@ -562,8 +583,9 @@ class ModelInferenceEngine:
         """
         Run inference on a single prompt. If cached, returns from the cache.
         """
-
-        temperature = ModelEngineFactory.get_temperature(model_name, temperature=self.args.temperature) 
+        temp = getattr(self.args, "temperature", None)
+        temperature = 0.5 if temp is None else temp
+        temperature = ModelEngineFactory.get_temperature(model_name, temperature=temperature) 
         
         if image_path is not None:
             key = (
