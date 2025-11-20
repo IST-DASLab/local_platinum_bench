@@ -5,7 +5,7 @@ import time
 
 from tqdm import tqdm
 
-from models import ModelInferenceEngine, ModelEngineFactory
+from .models import ModelInferenceEngine, ModelEngineFactory
 import openai
 
 class LLMCache:
@@ -146,7 +146,7 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
         response_cache = get_llm_cache(dataset_name)
         inference_engine = ModelInferenceEngine(response_cache, args=args)
 
-    prompt = get_prompt(example, model_name, args = args)
+    prompt = get_prompt(example, model_name, args=args)
     
     try:
         return inference_engine.run_inference(

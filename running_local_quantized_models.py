@@ -20,7 +20,7 @@ def serve_model(model_name, models_path, port, dtype="bfloat16", api_key="token-
     return server_proc
 
 # Function to run benchmark
-def run_benchmark(model_name, benchmark_script="src/run_benchmark.py", models_path=Path("models/"), port="8000", host="localhost",api_key="token-abc123",temperature=0.5):
+def run_benchmark(model_name, benchmark_script="platinumbench/run_benchmark.py", models_path=Path("models/"), port="8000", host="localhost",api_key="token-abc123",temperature=0.5):
     print(f"\n--- Running benchmark for: {model_name} ---")
     print(f"{model_name}")
     benchmark_cmd = [
@@ -73,7 +73,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Evaluate batch of quantized models on Platinum Benchmarks')
 
     parser.add_argument('--models_path', type=str, default="models/", help='Path to the folder containing quantized models')
-    parser.add_argument('--benchmark_script', type=str, default="src/run_benchmark.py", help='Path to the benchmark script')
+    parser.add_argument('--benchmark_script', type=str, default="platinumbench/run_benchmark.py", help='Path to the benchmark script')
     parser.add_argument('--output_csv', type=str, default="./outputs/live_results.csv", help='Output CSV file to save the results')
     parser.add_argument('--output-file', type=str, default='./outputs/results_vision.csv', help='Output file name to save the results')
     parser.add_argument('--port', type=int, default=8000, help='Port number for vllm server.')

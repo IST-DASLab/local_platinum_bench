@@ -1,0 +1,33 @@
+from setuptools import setup
+
+setup(
+    name='platinumbench',
+    version='0.0.1',    
+    description='A example Python package',
+    url='https://github.com/IST-DASLab/local_platinum_bench',
+    author='Joshua Vendrow and Edward Vendrow and Sara Beery and Aleksander Madry',
+    author_email='jvendrow@gmail.com',
+    license='Attribution 4.0 International',
+    packages=['platinumbench'],
+    install_requires=['anthropic>=0.40.0',
+                      'datasets>=3.1.0',
+                      'huggingface_hub>=0.27.1',
+                      'openai>=1.59.7',
+                      'pandas>=1.4.1',
+                      'python-dotenv>=1.0.1',                   
+                      ],
+    classifiers=[
+        'Development Status :: 1 - Planning',
+        'Intended Audience :: Science/Research',
+        'License :: OSI Approved :: Attribution 4.0 International',  
+        'Operating System :: POSIX :: Linux',        
+        'Programming Language :: Python :: 2',
+        'Programming Language :: Python :: 2.7',
+        'Programming Language :: Python :: 3',
+        'Programming Language :: Python :: 3.8',
+        'Programming Language :: Python :: 3.9',
+        'Programming Language :: Python :: 3.10',
+        'Programming Language :: Python :: 3.11',
+        'Programming Language :: Python :: 3.12',
+    ],
+)

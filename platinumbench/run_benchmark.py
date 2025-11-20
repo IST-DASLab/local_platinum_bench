@@ -1,7 +1,7 @@
 """Evaluate models on Platinum Benchmarks
 
 Usage:
-python src/run_benchmark.py --model-list gpt-4o-mini
+python platinumbench/run_benchmark.py --model-list gpt-4o-mini
 """
 
 import datasets
@@ -12,10 +12,24 @@ import os
 import json
 import argparse
 
-from utils import get_parse_fn, check_prediction, get_prompt, run_predictions, run_predictions_parallel
+from .utils import get_parse_fn, check_prediction, get_prompt, run_predictions, run_predictions_parallel
 
 
 def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use_paper_version=False, use_unfiltered_version=False, args=None):
+    """Runs the benchmark for the specified models and saves the results to a CSV file.
+    Args:
+        model_list: List of model names or dict of {model_name: model torch.nn.Module} to evaluate.
+        output_file: Path to the output CSV file.
+        parallelism: Number of threads to use for parallel prediction.
+        save_errors: Whether to save the errors for each dataset.
+        use_paper_version: Whether to use the version of the benchmark used in the paper.
+        use_unfiltered_version: Whether to use the unfiltered benchmark, including rejected examples.
+        args: Additional arguments for model inference in form of dict(as in argparse). Examples include: 
+              temperature: Temperature for the model default is 0.5., 
+              reasoning_model:Indicate if the model is in reasoning mode., etc."""
+
+    assert isinstance(model_list, dict) or isinstance(model_list, list), "model_list should be a list of model names or dict of models and tokenizer ."
+
     load_dotenv()
     
     print("args:", args)
@@ -56,7 +70,10 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use
         
         errors = {}
 
-        for model_name in model_list:
+        for model_name in model_list: #TODO FLIP with dataset for
+            if isinstance(model_list, dict):
+                args.model=model_list[model_name].model
+                args.tokenizer=model_list[model_name].tokenizer
             print(model_name)
             errors[model_name] = []
             if parallelism > 1:
@@ -89,7 +106,10 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, use
                         'prediction': prediction,
                         'explanation': output,
                     })
-               
+                if isinstance(model_list, dict):
+                    args.model=model_list[model_name].model.to("cpu")
+                    args.tokenizer=model_list[model_name].tokenizer.to("cpu")
+                
             
             if empty_count > 0:
                 print(f"WARN: Model {model_name} had {empty_count} empty outputs for dataset {dataset_name}, perhaps due to API errors.")

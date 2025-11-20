@@ -3,7 +3,7 @@
 This code was adapted from `run_benchmark.py`
 
 Usage:
-python src/run_gsm8k_platinum.py --model-list gpt-4o-mini
+python platinumbench/run_gsm8k_platinum.py --model-list gpt-4o-mini
 """
 
 import datasets

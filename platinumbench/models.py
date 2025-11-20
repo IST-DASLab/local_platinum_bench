@@ -1,7 +1,8 @@
 import os
 import base64
 from dataclasses import dataclass, field
-
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
@@ -40,6 +41,37 @@ class Model:
 
     def predict_image(self, prompt, base64_image, temperature=0.5):
         raise NotImplementedError("Model must implement predict method.")
+
+
+class HFCompletionStyleModel(Model):
+    def init_client(self):
+        self.model = self.model.pop('model', 'http://localhost:8000')
+        self.tokenizer  = self.tokenizer.pop('tokenizer', None)
+        if torch.cuda.is_available():
+            self.model = self.model.to("cuda")
+            self.model = self.tokenizer.to("cuda")
+
+    def predict(self, prompt, temperature=0.5):
+        messages = [
+                {"role": "user", "content": prompt},
+            ]
+        inputs = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True
+        )
+        if torch.cuda.is_available():
+            inputs = {k: v.to("cuda") for k, v in inputs.items()}
+        
+        outputs = self.model.generate(
+            **inputs,
+            max_new_tokens=self.max_tokens,
+            temperature=temperature,
+            do_sample=True,
+        )
+        response = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+        return response
+
 
 
 class BaseCompletionStyleModel(Model):
@@ -373,10 +405,12 @@ class ModelEngineFactory:
         # If we already created an engine for this general "family", return it
         # or you can choose to cache them by exact `model_name`.
         
-      
+        if isinstance(model_name, dict):
+            return HFCompletionStyleModel(api_name=model_name, tokenizer=args.tokenizer, model = args.model )
 
         if model_name in cls._model_engines:
             return cls._model_engines[model_name]
+        
         if args.vllm:
             print("Using vllm model")
             print(f"Model name: {model_name}, Host: {args.host}, Port: {args.port}")
@@ -530,7 +564,7 @@ class ModelInferenceEngine:
         """
 
         temperature = ModelEngineFactory.get_temperature(model_name, temperature=self.args.temperature) 
-                
+        
         if image_path is not None:
             key = (
                 prompt,
@@ -566,7 +600,6 @@ class ModelInferenceEngine:
                 base64_image,
                 temperature=temperature,
             )
-
         else:
             response = engine.predict(
                 prompt,
