@@ -12,8 +12,16 @@ import pandas as pd
 import os
 import json
 import argparse
+import torch
+from types import SimpleNamespace
 
-from utils import get_parse_fn, get_prompt, run_predictions, run_predictions_parallel
+
+from .utils import get_parse_fn, get_prompt, run_predictions, run_predictions_parallel, fix_seed, clear_device_cache
+
+try:
+    import wandb
+except ImportError:
+    wandb = None
 
 template_gsm8k = """Solve the following math word problem.
 
@@ -21,7 +29,33 @@ template_gsm8k = """Solve the following math word problem.
 
 Think step-by-step. Then, provide the final answer as a single integer in the format "Answer: XXX" with no extra formatting."""
 
-def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, args=None):
+def run_gsm8k_benchmark(model_list, output_file, parallelism=1, errors_dir=None, wandb=None,seed=42, args=SimpleNamespace()):
+    
+    """Runs the benchmark for the specified models and saves the results to a CSV file.
+    Args:
+        model_list: List of model names or dict of {model_name: tuple(model torch.nn.Module, tokenizer)} to evaluate.
+        output_file: Path to the output CSV file.
+        parallelism: Number of threads to use for parallel prediction.
+        errors_dir: error dir 
+        use_paper_version: Whether to use the version of the benchmark used in the paper.
+        use_unfiltered_version: Whether to use the unfiltered benchmark, including rejected examples.
+        dataset_names: ["singleop", "singleq", "multiarith",
+                        "svamp", "gsm8k", "mmlu_math",
+                        "bbh_logical_deduction_three_objects", "bbh_object_counting",
+                        "bbh_navigate","tab_fact","hotpotqa",
+                        "squad","drop","winograd_wsc"]
+        args: Additional arguments for model inference in form of dict(as in argparse). Examples include: 
+              temperature: Temperature for the model default is 0.5., 
+              reasoning_model:Indicate if the model is in reasoning mode., etc.
+        
+        return: pandas datasets with error count and accuracies for each model and datasets
+    """
+
+    if not getattr(args, "seed", False):
+        args.seed=seed
+    
+    fix_seed(seed=args.seed)
+
     load_dotenv()
 
     benchmark_path = "madrylab/gsm8k-platinum"
@@ -40,15 +74,35 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, arg
 
     parse_fn = get_parse_fn(parsing_strategy)
     
+    if wandb:
+        wandb.log({f"#_{dataset_name}", len(platinum_dataset)})
+        artifacts={}
+        for model_name in model_list:
+            artifacts[model_name] = wandb.Artifact(f"{model_name}", type="inference")
+    
     errors = {}
     for model_name in model_list:
+        if isinstance(model_list[model_name], tuple):
+                if isinstance(model_list[model_name][0],torch.nn.Module):
+                    args.model=model_list[model_name][0]
+                    args.tokenizer=model_list[model_name][1]
+                elif isinstance(model_list[model_name][1],torch.nn.Module):
+                    args.model=model_list[model_name][1]
+                    args.tokenizer=model_list[model_name][0]
+                else:
+                    raise NotImplementedError
+                
+        print(model_name)
         errors[model_name] = []
 
         if parallelism > 1:
             outputs = run_predictions_parallel(platinum_dataset, dataset_name, model_name, load_only=False, num_threads=parallelism, args=args)
         else:
             outputs = run_predictions(platinum_dataset, dataset_name, model_name, load_only=False, args=args)
-
+        
+        if isinstance(model_list, dict):
+            args.model.to("cpu")
+        
         empty_count = 0
         for example, output in zip(platinum_dataset, outputs):
             platinum_target = example['platinum_target']
@@ -75,41 +129,32 @@ def run_benchmark(model_list, output_file, parallelism=1, save_errors=False, arg
         if empty_count > 0:
             print(f"WARN: Model {model_name} had {empty_count} empty outputs for dataset {dataset_name}, perhaps due to API errors.")
             
-        if save_errors:
-            errors_dir = f'./errors/{model_name}/'
-            os.makedirs(errors_dir, exist_ok=True)
-            with open(os.path.join(errors_dir, f'errors_{dataset_name}.json'), 'w') as f:
-                json.dump(errors, f, indent=2)
+        
+        if errors_dir:
+            model_errors_dir = errors_dir + f'/{model_name}/'
+            os.makedirs(model_errors_dir, exist_ok=True)
 
+            with open(os.path.join(model_errors_dir, f'errors_{dataset_name}.json'), 'w') as f:
+                json.dump(errors, f, indent=2)
+            
+        if wandb:
+            with artifacts[model_name].new_file(f"errors_{dataset_name}.json", mode="w") as f:
+                json.dump(errors, f, indent=2)
+    if wandb:
+        if len(model_list)>1:
+            wandb.log({f"platinumbench/{dataset_name}": errors})
+            # raise "I don't want to deal with this , go implement yourself"
+        wandb.log({f"platinumbench/errors.{dataset_name}": errors[model_name]})
+    
     df = pd.DataFrame([{
         'model': model_name,
         'error_count': len(errors[model_name]),
         } for model_name in model_list])
+    
     print(df.to_string(index=False))
 
     # Save the results to a file
     os.makedirs(os.path.dirname(output_file), exist_ok=True)
     df.to_csv(output_file, index=False)
     print(f"Saved results to {output_file}")
-
-if __name__ == '__main__':
-
-    parser = argparse.ArgumentParser(description='Evaluate models on Platinum Benchmarks')
-
-    parser.add_argument('--model-list', type=str, nargs="+", default=None, help='A space-separated list of models to be evaluated')
-    parser.add_argument('--vllm', action='store_true', help='The model is served with vllm.')
-    parser.add_argument('--port', type=int, default=8000, help='Port number for vllm server.')
-    parser.add_argument('--host', type=str, default='localhost', help='Host for vllm server.')
-    parser.add_argument('--api-key', type=str, default='token-abc123', help='API key for the model, if required.')
-    parser.add_argument('--temperature', type=float, default=0.5, help='Temperature for the model default is 0.5.')
-    parser.add_argument('--reasoning-model', action='store_true', help='Indicate if the model is in reasoning mode.')
-    parser.add_argument('--output-file', type=str, default='./outputs/results_gsm8k_platinum.csv', help='Output file name to save the results')
-    parser.add_argument('--parallel', type=int, default=1, help='Number of threads to use for parallel prediction. If more than 1, will use parallelism')
-    parser.add_argument('--save-errors', action='store_true', help='Save errors for each dataset to the directory ./outputs/errors')
-
-    args = parser.parse_args()
-    if len(args.model_list) > 1 and args.vllm:
-        raise ValueError("vllm serving with multiple models is not supported yet.")
-    
-
-    run_benchmark(args.model_list, args.output_file, parallelism=args.parallel, save_errors=args.save_errors, args=args)
+    return df

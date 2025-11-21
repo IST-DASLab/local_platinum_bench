@@ -160,7 +160,8 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
             prompt, 
             model_name=model_name,
             force_refresh=force_refresh,
-            load_only=load_only
+            load_only=load_only,
+            run_id=args.seed
         )
     except openai.BadRequestError as e:
         print(f"Got bad request error for example with {model_name} on {dataset_name}")
