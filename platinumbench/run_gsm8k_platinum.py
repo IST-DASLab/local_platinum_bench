@@ -78,8 +78,9 @@ def run_gsm8k_benchmark(model_list, output_file, parallelism=1, errors_dir=None,
         wandb.log({f"#_{dataset_name}", len(platinum_dataset)})
         artifacts={}
         for model_name in model_list:
-            artifacts[model_name] = wandb.Artifact(f"{model_name}", type="inference")
-    
+            uniquename=(model_name + str(args.seed)).replace("/", "--") if str(args.seed) not in model_name else model_name.replace("/", "--")
+            artifacts[model_name] = wandb.Artifact(f"{uniquename}", type="inference")
+        
     errors = {}
     for model_name in model_list:
         if isinstance(model_list[model_name], tuple):

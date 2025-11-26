@@ -87,7 +87,8 @@ def run_benchmark(model_list, output_file=None, parallelism=1, errors_dir=None, 
             artifacts[model_name] = wandb.Artifact(f"{uniquename}", type="inference")
         
     for dataset_name in dataset_names:
-        if "gsm8k_full" in dataset_names:
+        
+        if "gsm8k_full" in dataset_name:
             continue
         
         print(f"Running predictions for {dataset_name}")
