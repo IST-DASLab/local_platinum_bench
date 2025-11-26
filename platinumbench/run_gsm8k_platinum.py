@@ -75,7 +75,7 @@ def run_gsm8k_benchmark(model_list, output_file, parallelism=1, errors_dir=None,
     parse_fn = get_parse_fn(parsing_strategy)
     
     if wandb:
-        wandb.log({f"#_{dataset_name}", len(platinum_dataset)})
+        wandb.log({f"#_{dataset_name}": len(platinum_dataset)})
         artifacts={}
         for model_name in model_list:
             uniquename=(model_name + str(args.seed)).replace("/", "--") if str(args.seed) not in model_name else model_name.replace("/", "--")
