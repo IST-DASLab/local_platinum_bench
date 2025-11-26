@@ -83,7 +83,8 @@ def run_benchmark(model_list, output_file=None, parallelism=1, errors_dir=None, 
     if wandb:
         artifacts={}
         for model_name in model_list:
-            artifacts[model_name] = wandb.Artifact(f"{model_name}", type="inference")
+            uniquename=(model_name + str(args.seed)).replace("/", "--") if str(args.seed) not in model_name else model_name.replace("/", "--")
+            artifacts[model_name] = wandb.Artifact(f"{uniquename}", type="inference")
         
     for dataset_name in dataset_names:
         if "gsm8k_full" in dataset_names:
@@ -105,7 +106,8 @@ def run_benchmark(model_list, output_file=None, parallelism=1, errors_dir=None, 
 
 
         for model_name in model_list: #TODO FLIP with dataset loop
-            if isinstance(model_list[model_name], tuple):
+
+            if isinstance(model_list, dict) and isinstance(model_list[model_name], tuple):
                 if isinstance(model_list[model_name][0],torch.nn.Module):
                     args.model=model_list[model_name][0]
                     args.tokenizer=model_list[model_name][1]

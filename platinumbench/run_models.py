@@ -42,7 +42,7 @@ def main():
     parser.add_argument("--dataset_names",
                         type=str,
                         nargs="+",                       # allow multiple values
-                        choices=DATASET_NAMES+"gsm8k_full",           # restrict to this list
+                        choices=DATASET_NAMES+["gsm8k_full"],           # restrict to this list
                         default=DATASET_NAMES,           # default: all datasets
                         help="Datasets to run; default is all.",
                     )
@@ -61,10 +61,10 @@ def main():
         assert wandb is not None, "wandb is not installed. Please install wandb `pip install wandb`."
         wandb.init(config=args)
 
-    run_benchmark(args.model_list, args.output_file, parallelism=args.parallel, errors_dir=args.errors_dir, use_paper_version=args.paper_version, use_unfiltered_version=args.unfiltered,dataset_names=args.dataset_names, seed=args.seed, wandb=None, args=args)
+    run_benchmark(args.model_list, args.output_file, parallelism=args.parallel, errors_dir=args.errors_dir, use_paper_version=args.paper_version, use_unfiltered_version=args.unfiltered,dataset_names=args.dataset_names, seed=args.seed, wandb=wandb if args.log_wandb else None, args=args)
     
     if "gsm8k_full" in args.dataset_names:
-        run_gsm8k_benchmark(args.model_list, args.output_file, parallelism=args.parallel, errors_dir=args.errors_dir, seed=args.seed, wandb=None, args=args)
+        run_gsm8k_benchmark(args.model_list, args.output_file, parallelism=args.parallel, errors_dir=args.errors_dir, seed=args.seed, wandb=wandb if args.log_wandb else None, args=args)
 
 if __name__ == "__main__":
     main()
