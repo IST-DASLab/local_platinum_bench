@@ -196,12 +196,34 @@ class LocalModel(BaseCompletionStyleModel):
         from openai import OpenAI
         base_url = self.api_kwargs.pop('base_url', 'http://localhost:8000')
         api_key  = self.api_kwargs.pop('api_key', None)
-
+        reasoning = self.api_kwargs.pop('reasoining', False)
+        
+        if reasoning:
+            print("Using reasoning chat template")
+            self.extra_body = {}
+        else:
+            print("Using model without reasoning chat template")
+            self.extra_body = {
+            "chat_template_kwargs": {
+                "enable_thinking": False
+                }
+            }
+           
         print(f"Initializing LocalModel with base_url: {base_url} and api_key: {api_key}")
         self.client = OpenAI(
             base_url=base_url,
             api_key=api_key,
         )
+    def predict(self, prompt, temperature=0.5):
+        completion = self.client.chat.completions.create(
+            model=self.api_name,
+            max_tokens=self.max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+            extra_body=self.extra_body
+        )
+        response = completion.choices[0].message.content
+        return response
 
 
 
@@ -439,6 +461,7 @@ class ModelEngineFactory:
                 api_name=model_name,
                 base_url= "http://" + args.host + f":{args.port}/v1",
                 api_key=args.api_key,
+                reasoining=getattr(args, "reasoning_model", False)
             )
         elif model_name == "gpt-4o-2024-08-06":
             engine = OpenAIModel(api_name="gpt-4o-2024-08-06")
