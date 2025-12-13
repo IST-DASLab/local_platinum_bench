@@ -45,9 +45,12 @@ class LLMCache:
             self.set(prompt, response)
 
 
-def get_llm_cache(dataset_name):
+def get_llm_cache(dataset_name, model_name=None,seed=None):
     os.makedirs(os.path.dirname("cache/"), exist_ok=True)
-    return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{dataset_name}.pkl')
+    if model_name is not None and seed is not None:
+        LLMCache(cache_file=f'cache/reliability_benchmark_cache_{model_name}_{seed}.pkl')
+    else:
+        return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{dataset_name}.pkl')
 
 
 def get_parse_fn(parsing_strategy):
@@ -150,7 +153,7 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
 
     # Initialize a separate cache and inference engine for each thread if needed
     if inference_engine is None:
-        response_cache = get_llm_cache(dataset_name)
+        response_cache = get_llm_cache(dataset_name, model_name=model_name, seed=args.seed)
         inference_engine = ModelInferenceEngine(response_cache, args=args)
 
     prompt = get_prompt(example, model_name, args=args)
@@ -161,7 +164,8 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
             model_name=model_name,
             force_refresh=force_refresh,
             load_only=load_only,
-            run_id=args.seed
+            run_id=args.seed,
+            dataset_name=dataset_name
         )
     except openai.BadRequestError as e:
         print(f"Got bad request error for example with {model_name} on {dataset_name}")
@@ -171,7 +175,7 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
 
 def run_predictions(dataset, dataset_name, model_name, force_refresh=False, load_only=False, args=None):
     """Runs the model on the full dataset and caches the results."""
-    response_cache = get_llm_cache(dataset_name)
+    response_cache = get_llm_cache(dataset_name,model_name=model_name,seed=args.seed)
     inference_engine = ModelInferenceEngine(response_cache, args=args)
 
     predictions = []
@@ -190,7 +194,7 @@ def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=Fa
     import multiprocess as mp
 
     # Create a common, unchanging cache for all threads
-    response_cache = get_llm_cache(dataset_name)
+    response_cache = get_llm_cache(dataset_name,model_name=model_name,seed=args.seed)
 
     def inference_fn(example):
         # Initialize a separate inference engine for each thread
@@ -204,7 +208,7 @@ def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=Fa
             return None, None, False
     
     # Separately, create a mutable cache where we can store the results
-    response_cache_mutable = get_llm_cache(dataset_name)
+    response_cache_mutable = get_llm_cache(dataset_name,model_name=model_name,seed=args.seed)
     
     results = []
     with mp.Pool(num_threads) as pool:

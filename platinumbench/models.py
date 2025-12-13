@@ -579,6 +579,7 @@ class ModelInferenceEngine:
         run_id=0,
         force_refresh=False,
         load_only=False,
+        dataset_name=None,
     ):
         """
         Run inference on a single prompt. If cached, returns from the cache.
@@ -594,9 +595,10 @@ class ModelInferenceEngine:
                 temperature,
                 run_id,
                 model_name,
+                dataset_name
             )
         else:
-            key = (prompt, temperature, run_id, model_name)
+            key = (prompt, temperature, run_id, model_name, dataset_name)
 
         # If only loading from cache, ensure the key exists
         if load_only and not self.response_cache.has(key):
