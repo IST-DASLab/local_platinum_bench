@@ -47,8 +47,9 @@ class LLMCache:
 
 def get_llm_cache(dataset_name, model_name=None,seed=None):
     os.makedirs(os.path.dirname("cache/"), exist_ok=True)
+    print(model_name, seed)
     if model_name is not None and seed is not None:
-        LLMCache(cache_file=f'cache/reliability_benchmark_cache_{model_name}_{seed}.pkl')
+        return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{model_name}_{seed}.pkl')
     else:
         return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{dataset_name}.pkl')
 
@@ -154,6 +155,7 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
     # Initialize a separate cache and inference engine for each thread if needed
     if inference_engine is None:
         response_cache = get_llm_cache(dataset_name, model_name=model_name, seed=args.seed)
+        print()
         inference_engine = ModelInferenceEngine(response_cache, args=args)
 
     prompt = get_prompt(example, model_name, args=args)
