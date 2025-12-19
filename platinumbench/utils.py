@@ -47,7 +47,7 @@ class LLMCache:
 
 def get_llm_cache(dataset_name, model_name=None,seed=None):
     os.makedirs(os.path.dirname("cache/"), exist_ok=True)
-    print(model_name, seed)
+    print(f"model_name=", f"seed=")
     if model_name is not None and seed is not None:
         return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{model_name}_{seed}.pkl')
     else:
