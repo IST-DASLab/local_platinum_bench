@@ -19,7 +19,7 @@ vllm serve meta-llama/Llama-3.2-1B-Instruct \
 Second, you can launch benchmarks using the served model via: 
 
 ```python
- python src/run_benchmark.py --vllm --port 8000 --host localhost --model-list meta-llama/Llama-3.2-1B-Instruct --api-key token-abc123 --output-file outputs/Llama-3.2-1B-Instruct.csv --temperature 0.5 --save-errors
+ python platinumbench/run_benchmark.py --vllm --port 8000 --host localhost --model-list meta-llama/Llama-3.2-1B-Instruct --api-key token-abc123 --output-file outputs/Llama-3.2-1B-Instruct.csv --temperature 0.5 --save-errors
 ```
 
 Additionally, for evals on multiple models from a folder, you can use the `running_local_quantized_models.py` script.

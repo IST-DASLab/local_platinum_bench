@@ -1,11 +1,18 @@
 import os
 import pickle
 import re
-import time
+import gc
+import random
+import inspect
+import dataclasses
+from typing import Any, Sequence, Callable, Dict
+
+import numpy as np
+import torch
 
 from tqdm import tqdm
 
-from models import ModelInferenceEngine, ModelEngineFactory
+from .models import ModelInferenceEngine, ModelEngineFactory
 import openai
 
 class LLMCache:
@@ -38,9 +45,13 @@ class LLMCache:
             self.set(prompt, response)
 
 
-def get_llm_cache(dataset_name):
+def get_llm_cache(dataset_name, model_name=None,seed=None):
     os.makedirs(os.path.dirname("cache/"), exist_ok=True)
-    return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{dataset_name}.pkl')
+    print(f"model_name=", f"seed=")
+    if model_name is not None and seed is not None:
+        return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{model_name}_{seed}.pkl')
+    else:
+        return LLMCache(cache_file=f'cache/reliability_benchmark_cache_{dataset_name}.pkl')
 
 
 def get_parse_fn(parsing_strategy):
@@ -133,7 +144,7 @@ def get_prompt(example, model_name, args=None):
     if model_name.startswith('o1-preview') or model_name.startswith('o1-2024-12-17'):
         return example['platinum_prompt_no_cot'].replace('Then, provide', 'Provide')
     
-    if model_name in ModelEngineFactory.reasoning_models or args.reasoning_model:
+    if model_name in ModelEngineFactory.reasoning_models or getattr(args, "reasoning_model", False):
         return example['platinum_prompt_no_cot']
     else:
         return example['platinum_prompt']
@@ -143,17 +154,20 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
 
     # Initialize a separate cache and inference engine for each thread if needed
     if inference_engine is None:
-        response_cache = get_llm_cache(dataset_name)
+        response_cache = get_llm_cache(dataset_name, model_name=model_name, seed=args.seed)
+        print()
         inference_engine = ModelInferenceEngine(response_cache, args=args)
 
-    prompt = get_prompt(example, model_name, args = args)
+    prompt = get_prompt(example, model_name, args=args)
     
     try:
         return inference_engine.run_inference(
             prompt, 
             model_name=model_name,
             force_refresh=force_refresh,
-            load_only=load_only
+            load_only=load_only,
+            run_id=args.seed,
+            dataset_name=dataset_name
         )
     except openai.BadRequestError as e:
         print(f"Got bad request error for example with {model_name} on {dataset_name}")
@@ -163,7 +177,7 @@ def process_single_example(example, model_name, dataset_name, inference_engine=N
 
 def run_predictions(dataset, dataset_name, model_name, force_refresh=False, load_only=False, args=None):
     """Runs the model on the full dataset and caches the results."""
-    response_cache = get_llm_cache(dataset_name)
+    response_cache = get_llm_cache(dataset_name,model_name=model_name,seed=args.seed)
     inference_engine = ModelInferenceEngine(response_cache, args=args)
 
     predictions = []
@@ -182,7 +196,7 @@ def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=Fa
     import multiprocess as mp
 
     # Create a common, unchanging cache for all threads
-    response_cache = get_llm_cache(dataset_name)
+    response_cache = get_llm_cache(dataset_name,model_name=model_name,seed=args.seed)
 
     def inference_fn(example):
         # Initialize a separate inference engine for each thread
@@ -196,7 +210,7 @@ def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=Fa
             return None, None, False
     
     # Separately, create a mutable cache where we can store the results
-    response_cache_mutable = get_llm_cache(dataset_name)
+    response_cache_mutable = get_llm_cache(dataset_name,model_name=model_name,seed=args.seed)
     
     results = []
     with mp.Pool(num_threads) as pool:
@@ -211,3 +225,48 @@ def run_predictions_parallel(dataset, dataset_name, model_name, force_refresh=Fa
 
     predictions = [response for _, response, _ in results]
     return predictions
+
+
+
+
+
+
+def fix_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+
+
+def clear_device_cache(garbage_collection=False):
+    if garbage_collection:
+        gc.collect()
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+    elif torch.xpu.is_available():
+        torch.xpu.empty_cache()
+
+def to(data: Any, *args, **kwargs):
+    """
+    # adopted from https://github.com/Yura52/delu/blob/main/delu/_tensor_ops.py
+    TODO
+    """
+
+    def _to(x):
+        return to(x, *args, **kwargs)
+
+    if isinstance(data, torch.Tensor):
+        return data.to(*args, **kwargs)
+    elif isinstance(data, (tuple, list, set)):
+        return type(data)(_to(x) for x in data)
+    elif isinstance(data, dict):
+        return type(data)((k, _to(v)) for k, v in data.items())
+    elif dataclasses.is_dataclass(data):
+        return type(data)(**{k: _to(v) for k, v in vars(data).items()})
+    # do nothing if provided value is not tensor or collection of tensors
+    else:
+        return data
+
+
+

@@ -1,7 +1,7 @@
 """Evaluate models on Platinum Benchmarks
 
 Usage:
-python src/run_vision_benchmark.py --model-list gpt-4o-mini --coco-path PATH
+python platinumbench/run_vision_benchmark.py --model-list gpt-4o-mini --coco-path PATH
 """
 
 import datasets

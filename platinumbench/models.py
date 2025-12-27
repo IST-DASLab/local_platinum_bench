@@ -1,7 +1,8 @@
 import os
 import base64
 from dataclasses import dataclass, field
-
+from transformers import AutoModelForCausalLM, AutoTokenizer
+import torch
 
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
@@ -40,6 +41,56 @@ class Model:
 
     def predict_image(self, prompt, base64_image, temperature=0.5):
         raise NotImplementedError("Model must implement predict method.")
+
+
+class HFCompletionStyleModel(Model):
+
+    def init_client(self):
+
+        # get model / tokenizer passed via api_kwargs
+        self.model = self.api_kwargs.pop("model", None)
+        self.tokenizer = self.api_kwargs.pop("tokenizer", None)
+        if self.model is None or self.tokenizer is None:
+            raise ValueError("Both 'model' and 'tokenizer' must be provided in api_kwargs.")
+
+        if torch.cuda.is_available():
+            self.model = self.model.to("cuda")
+
+    def predict(self, prompt, temperature: float = 0.5) -> str:
+        messages = [
+            {"role": "user", "content": prompt},
+        ]
+
+        # IMPORTANT: return_tensors="pt" so we get a BatchEncoding with tensors
+        input_ids = self.tokenizer.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_tensors="pt",
+        )
+        if not isinstance(input_ids, torch.Tensor):
+            input_ids = torch.tensor(input_ids)
+        if input_ids.ndim == 1:
+            input_ids = input_ids.unsqueeze(0)  # add batch dimension
+        # Move inputs to same device as model
+        device = next(self.model.parameters()).device
+        input_ids = input_ids.to(device)
+
+        outputs = self.model.generate(
+            input_ids,
+            max_new_tokens=self.max_tokens,
+            temperature=temperature,
+            do_sample=temperature > 0,
+        )
+
+        # Drop the prompt part, decode only generated tokens
+        input_len = input_ids.shape[-1]
+        generated_ids = outputs[0, input_len:]
+
+        response = self.tokenizer.decode(generated_ids, skip_special_tokens=True)
+        return response
+
+
 
 
 class BaseCompletionStyleModel(Model):
@@ -145,12 +196,34 @@ class LocalModel(BaseCompletionStyleModel):
         from openai import OpenAI
         base_url = self.api_kwargs.pop('base_url', 'http://localhost:8000')
         api_key  = self.api_kwargs.pop('api_key', None)
-
+        reasoning = self.api_kwargs.pop('reasoining', False)
+        
+        if reasoning:
+            print("Using reasoning chat template")
+            self.extra_body = {}
+        else:
+            print("Using model without reasoning chat template")
+            self.extra_body = {
+            "chat_template_kwargs": {
+                "enable_thinking": False
+                }
+            }
+           
         print(f"Initializing LocalModel with base_url: {base_url} and api_key: {api_key}")
         self.client = OpenAI(
             base_url=base_url,
             api_key=api_key,
         )
+    def predict(self, prompt, temperature=0.5):
+        completion = self.client.chat.completions.create(
+            model=self.api_name,
+            max_tokens=self.max_tokens,
+            temperature=temperature,
+            messages=[{"role": "user", "content": prompt}],
+            extra_body=self.extra_body
+        )
+        response = completion.choices[0].message.content
+        return response
 
 
 
@@ -373,17 +446,22 @@ class ModelEngineFactory:
         # If we already created an engine for this general "family", return it
         # or you can choose to cache them by exact `model_name`.
         
-      
+        if hasattr(args, "model"):
+            if not isinstance(args.model,torch.nn.Module):
+                raise NotImplementedError
+            return HFCompletionStyleModel(api_name=model_name, tokenizer= args.tokenizer, model = args.model )
 
         if model_name in cls._model_engines:
             return cls._model_engines[model_name]
-        if args.vllm:
+        
+        if getattr(args, "vllm", False):
             print("Using vllm model")
             print(f"Model name: {model_name}, Host: {args.host}, Port: {args.port}")
             engine = LocalModel(
                 api_name=model_name,
                 base_url= "http://" + args.host + f":{args.port}/v1",
                 api_key=args.api_key,
+                reasoining=getattr(args, "reasoning_model", False)
             )
         elif model_name == "gpt-4o-2024-08-06":
             engine = OpenAIModel(api_name="gpt-4o-2024-08-06")
@@ -524,13 +602,15 @@ class ModelInferenceEngine:
         run_id=0,
         force_refresh=False,
         load_only=False,
+        dataset_name=None,
     ):
         """
         Run inference on a single prompt. If cached, returns from the cache.
         """
-
-        temperature = ModelEngineFactory.get_temperature(model_name, temperature=self.args.temperature) 
-                
+        temp = getattr(self.args, "temperature", None)
+        temperature = 0.5 if temp is None else temp
+        temperature = ModelEngineFactory.get_temperature(model_name, temperature=temperature) 
+        
         if image_path is not None:
             key = (
                 prompt,
@@ -538,9 +618,10 @@ class ModelInferenceEngine:
                 temperature,
                 run_id,
                 model_name,
+                dataset_name
             )
         else:
-            key = (prompt, temperature, run_id, model_name)
+            key = (prompt, temperature, run_id, model_name, dataset_name)
 
         # If only loading from cache, ensure the key exists
         if load_only and not self.response_cache.has(key):
@@ -566,7 +647,6 @@ class ModelInferenceEngine:
                 base64_image,
                 temperature=temperature,
             )
-
         else:
             response = engine.predict(
                 prompt,
